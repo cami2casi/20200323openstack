@@ -1,30 +1,42 @@
 ---
 - name: A playbook to DL images and then UL to OpenStack Glance
   hosts: localhost
+  connection: local
 
   vars:
+    # user must supply this from https://cloud-images.ubuntu.com/
     img_to_dl: "https://cloud-images.ubuntu.com/focal/20200322/focal-server-cloudimg-amd64-disk-kvm.img"
+
     ansible_python_interpreter: "/usr/bin/python"
+    tempdir: "~/image_temp/" # throw away temp dir for download image
+
+    ## assign values to vars based on input supplied by user
+    imgname: "{{ img_to_dl.split('/')[-1] }}"
+    imgdate: "{{ img_to_dl.split('/')[-2] }}"
 
   tasks:
 
     # create temp folder to DL to
-    
+    - name: Create a temp folder to DL to
+      file:
+        state: directory
+        path: "{{ tempdir }}"  #ref to variable that contains temp dir that will house DLed image
+
     # download image that will be updated to OpenStack Glance
     - name: Download the image "{{ img_to_dl }}"
       get_url:
         url: "{{ img_to_dl }}"
-        dest: /home/centos/ans
+        dest: "{{ tempdir }}" # this is dir to store downloaded image
 
     #upload to OpenStack Glance (image service)
     - name: Upload the image "{{ img_to_dl }}"
       os_image:
         cloud: alta3cloud
-        name: 20200322-focal-server-cloudimg-amd64-disk-kvm
+        name: "{{ imgdate }}-{{ imgname.split('.')[0] }}" # merge imgdate with "just" name portion of image  
         container_format: bare
         disk_format: qcow2
         state: present
-        filename: /home/centos/ans/focal-server-cloudimg-amd64-disk-kvm.img
+        filename: "{{ tempdir }}{{ imgname }}"  #combine temp dir with name of download image
         #kernel: cirros-vmlinuz
         #ramdisk: cirros-initrd
         properties:
@@ -32,3 +44,9 @@
           distro: ubuntu
 
     # Determine if checksum on upload matches what expected
+
+    # delete temp directory
+    - name: Remove a temp folder containing image on local controller
+      file:
+        state: absent
+        path: "{{ tempdir }}"
